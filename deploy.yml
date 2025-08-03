@@ -1,0 +1,69 @@
+# Flujo de trabajo para construir y desplegar un sitio de Next.js en GitHub Pages
+name: Deploy Next.js site to Pages
+
+on:
+  # Se ejecuta en los pushes al branch "main"
+  push:
+    branches: ["main"]
+  # Te permite ejecutar este flujo de trabajo manualmente desde la pestaña de Acciones
+  workflow_dispatch:
+
+# Establece los permisos del GITHUB_TOKEN para permitir el despliegue en GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Permite solo un despliegue concurrente, abortando ejecuciones en progreso o pendientes.
+# Sin embargo, no canceles los despliegues en progreso en el branch por defecto (main).
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Tarea de construcción
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Deshabilita la conversión a Jekyll
+          static_site_generator: next
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+          # Genera una clave única a partir del hash del lockfile y del código fuente.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          # Si la clave no coincide, usa esta clave de restauración.
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
+      - name: Install dependencies
+        run: npm install
+      - name: Build with Next.js
+        run: next build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  # Tarea de despliegue
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
